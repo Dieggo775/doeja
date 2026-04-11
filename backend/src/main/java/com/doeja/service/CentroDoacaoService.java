@@ -1,10 +1,10 @@
 package com.doeja.service;
 
-import java.util.List;
-import java.util.stream.Collectors;
-
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
+import com.doeja.dto.CentroDoacaoFiltroDTO;
 import com.doeja.dto.CentroDoacaoMapper;
 import com.doeja.dto.CentroDoacaoRequestDTO;
 import com.doeja.dto.CentroDoacaoResponseDTO;
@@ -21,11 +21,8 @@ public class CentroDoacaoService {
         this.repository = repository;
     }
 
-    public List<CentroDoacaoResponseDTO> listarTodos() {
-        return repository.findAll()
-                .stream()
-                .map(CentroDoacaoMapper::toResponseDTO)
-                .collect(Collectors.toList());
+    public Page<CentroDoacaoResponseDTO> listarTodos(Pageable pageable) {
+        return repository.findAll(pageable).map(CentroDoacaoMapper::toResponseDTO);
     }
 
     public CentroDoacaoResponseDTO buscarPorId(Long id) {
@@ -67,5 +64,15 @@ public class CentroDoacaoService {
                 .orElseThrow(() -> new ResourceNotFoundException("Centro de doação não encontrado com id: " + id));
 
         repository.delete(centro);
+    }
+
+    public Page<CentroDoacaoResponseDTO> filtrar(CentroDoacaoFiltroDTO filtro, Pageable pageable) {
+        return repository.findByFiltros(
+            filtro.getNome(), 
+            filtro.getCidade(), 
+            filtro.getBairro(), 
+            filtro.getAtivo(), 
+            pageable
+        ).map(CentroDoacaoMapper::toResponseDTO);
     }
 }
