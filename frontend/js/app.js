@@ -1,6 +1,6 @@
 class DoeJaApp {
     constructor() {
-        this.API_BASE = 'http://localhost:8080/api';
+        this.API_BASE = '/api';
         this.currentPage = 0;
         this.pageSize = 10;
         this.currentFilters = {};
