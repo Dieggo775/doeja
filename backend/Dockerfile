@@ -1,16 +1,16 @@
+FROM eclipse-temurin:17-jdk-alpine AS builder
+WORKDIR /app
+
+COPY pom.xml .
+COPY src ./src
+
+RUN apk add --no-cache maven && \
+    mvn clean package -DskipTests
+
 FROM eclipse-temurin:17-jdk-alpine
 WORKDIR /app
 
-# Copiar pom.xml primeiro (cache de layers)
-COPY pom.xml .
-RUN apk add --no-cache maven && mvn dependency:go-offline -B
+COPY --from=builder /app/target/com.doeja-0.0.1-SNAPSHOT.jar app.jar
 
-# Copiar código fonte
-COPY src ./src
-
-# Build
-RUN mvn clean package -DskipTests
-
-# Executar
 EXPOSE 8080
-CMD ["java", "-jar", "target/*.jar"]
+ENTRYPOINT ["java", "-jar", "app.jar"]
