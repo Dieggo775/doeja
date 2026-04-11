@@ -1,11 +1,15 @@
 package com.doeja.service;
 
 import java.util.List;
-import java.util.Optional;
+import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
 
+import com.doeja.dto.CentroDoacaoMapper;
+import com.doeja.dto.CentroDoacaoRequestDTO;
+import com.doeja.dto.CentroDoacaoResponseDTO;
 import com.doeja.entity.CentroDoacao;
+import com.doeja.exception.ResourceNotFoundException;
 import com.doeja.repository.CentroDoacaoRepository;
 
 @Service
@@ -17,48 +21,51 @@ public class CentroDoacaoService {
         this.repository = repository;
     }
 
-    public List<CentroDoacao> listarTodos() {
-        return repository.findAll();
+    public List<CentroDoacaoResponseDTO> listarTodos() {
+        return repository.findAll()
+                .stream()
+                .map(CentroDoacaoMapper::toResponseDTO)
+                .collect(Collectors.toList());
     }
 
-    public Optional<CentroDoacao> buscarPorId(Long id) {
-        return repository.findById(id);
-    }
-
-    public List<CentroDoacao> buscarPorCidade(String cidade) {
-        return repository.findByCidadeIgnoreCase(cidade);
-    }
-
-    public List<CentroDoacao> buscarPorBairro(String bairro) {
-        return repository.findByBairroIgnoreCase(bairro);
-    }
-
-    public CentroDoacao salvar(CentroDoacao centro) {
-        return repository.save(centro);
-    }
-
-    public CentroDoacao atualizar(Long id, CentroDoacao dadosAtualizados) {
+    public CentroDoacaoResponseDTO buscarPorId(Long id) {
         CentroDoacao centro = repository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Centro não encontrado"));
+                .orElseThrow(() -> new ResourceNotFoundException("Centro de doação não encontrado com id: " + id));
 
-        centro.setNome(dadosAtualizados.getNome());
-        centro.setDescricao(dadosAtualizados.getDescricao());
-        centro.setEndereco(dadosAtualizados.getEndereco());
-        centro.setBairro(dadosAtualizados.getBairro());
-        centro.setCidade(dadosAtualizados.getCidade());
-        centro.setEstado(dadosAtualizados.getEstado());
-        centro.setCep(dadosAtualizados.getCep());
-        centro.setLatitude(dadosAtualizados.getLatitude());
-        centro.setLongitude(dadosAtualizados.getLongitude());
-        centro.setTelefone(dadosAtualizados.getTelefone());
-        centro.setEmail(dadosAtualizados.getEmail());
-        centro.setHorarioFuncionamento(dadosAtualizados.getHorarioFuncionamento());
-        centro.setAtivo(dadosAtualizados.getAtivo());
+        return CentroDoacaoMapper.toResponseDTO(centro);
+    }
 
-        return repository.save(centro);
+    public CentroDoacaoResponseDTO salvar(CentroDoacaoRequestDTO dto) {
+        CentroDoacao centro = CentroDoacaoMapper.toEntity(dto);
+        CentroDoacao salvo = repository.save(centro);
+        return CentroDoacaoMapper.toResponseDTO(salvo);
+    }
+
+    public CentroDoacaoResponseDTO atualizar(Long id, CentroDoacaoRequestDTO dto) {
+        CentroDoacao centro = repository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Centro de doação não encontrado com id: " + id));
+
+        centro.setNome(dto.getNome());
+        centro.setDescricao(dto.getDescricao());
+        centro.setEndereco(dto.getEndereco());
+        centro.setBairro(dto.getBairro());
+        centro.setCidade(dto.getCidade());
+        centro.setEstado(dto.getEstado());
+        centro.setCep(dto.getCep());
+        centro.setTelefone(dto.getTelefone());
+        centro.setHorarioFuncionamento(dto.getHorarioFuncionamento());
+        centro.setLatitude(dto.getLatitude());
+        centro.setLongitude(dto.getLongitude());
+        centro.setAtivo(dto.getAtivo());
+
+        CentroDoacao atualizado = repository.save(centro);
+        return CentroDoacaoMapper.toResponseDTO(atualizado);
     }
 
     public void deletar(Long id) {
-        repository.deleteById(id);
+        CentroDoacao centro = repository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Centro de doação não encontrado com id: " + id));
+
+        repository.delete(centro);
     }
 }
