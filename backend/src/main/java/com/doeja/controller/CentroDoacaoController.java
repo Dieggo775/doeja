@@ -5,6 +5,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.doeja.entity.CentroDoacao;
@@ -22,7 +23,13 @@ public class CentroDoacaoController {
     }
 
     @GetMapping
-    public Page<CentroDoacao> listar(Pageable pageable) {
-        return service.listar(pageable);
+    public Page<CentroDoacao> listar(
+            @RequestParam(required = false) String bairro,
+            @RequestParam(required = false) String cidade,
+            @RequestParam(required = false) Boolean ativo,
+            @RequestParam(required = false) String cep,
+            Pageable pageable
+    ) {
+        return service.listarFiltrado(bairro, cidade, ativo, cep, pageable);
     }
 }

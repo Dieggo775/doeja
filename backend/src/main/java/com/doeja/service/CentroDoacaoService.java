@@ -19,4 +19,24 @@ public class CentroDoacaoService {
     public Page<CentroDoacao> listar(Pageable pageable) {
         return repository.findAll(pageable);
     }
+
+    public Page<CentroDoacao> listarFiltrado(String bairro, String cidade, Boolean ativo, String cep, Pageable pageable) {
+        if (bairro != null && !bairro.trim().isEmpty()) {
+            return repository.findAllByBairroContainingIgnoreCase(bairro.trim(), pageable);
+        }
+
+        if (cidade != null && !cidade.trim().isEmpty()) {
+            return repository.findAllByCidadeContainingIgnoreCase(cidade.trim(), pageable);
+        }
+
+        if (ativo != null) {
+            return repository.findAllByAtivo(ativo, pageable);
+        }
+
+        if (cep != null && !cep.trim().isEmpty()) {
+            return repository.findAllByCepContaining(cep.trim(), pageable);
+        }
+
+        return repository.findAll(pageable);
+    }
 }
