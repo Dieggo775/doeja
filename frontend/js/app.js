@@ -443,8 +443,8 @@ class DoeJaApp {
     }
 }
 
-const app = new DoeJaApp();
+    window.app = new DoeJaApp();
 
-function initMap() {
-    app.initMap();
-}
+    window.initMap = function () {
+        window.app.initMap();
+};
