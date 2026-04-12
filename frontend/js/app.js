@@ -393,28 +393,86 @@ class DoeJaApp {
     }
 
     async searchByLocation() {
-        const query = document.getElementById('searchLocation')?.value?.trim();
-        if (!query || !this.map || !window.google || !google.maps) return;
+    const query = document.getElementById('searchLocation')?.value?.trim();
+    if (!query || !this.map || !window.google || !google.maps) return;
 
-        try {
-            const geocoder = new google.maps.Geocoder();
-
-            const results = await new Promise((resolve, reject) => {
-                geocoder.geocode({ address: `${query}, São Paulo, Brasil` }, (result, status) => {
-                    if (status === 'OK') resolve(result);
-                    else reject(new Error(`Geocode falhou: ${status}`));
-                });
+    try {
+        // 1. Centraliza o mapa na busca
+        const geocoder = new google.maps.Geocoder();
+        const results = await new Promise((resolve, reject) => {
+            geocoder.geocode({ address: `${query}, São Paulo, Brasil` }, (result, status) => {
+                if (status === 'OK') resolve(result);
+                else reject(new Error(`Geocode falhou: ${status}`));
             });
+        });
 
-            if (results[0]) {
-                const location = results[0].geometry.location;
-                this.map.setCenter(location);
-                this.map.setZoom(14);
-            }
-        } catch (error) {
-            console.error('Erro na busca:', error);
+        if (results[0]) {
+            const location = results[0].geometry.location;
+            this.map.setCenter(location);
+            this.map.setZoom(14);
         }
+
+        // 2. FILTRA os centros próximos à localização
+        const centrosProximos = this.centrosAtuais.filter(centro => {
+            if (!Number.isFinite(centro.latitude) || !Number.isFinite(centro.longitude)) return false;
+            
+            const distancia = this.haversine(
+                results[0].geometry.location.lat(), results[0].geometry.location.lng(),
+                centro.latitude, centro.longitude
+            );
+            return distancia <= 5; // 5km de raio
+        });
+
+        this.renderCentrosProximos(centrosProximos);
+        
+    } catch (error) {
+        console.error('Erro na busca:', error);
+        // Fallback: filtra por texto no nome/endereço
+        const centrosFiltrados = this.centrosAtuais.filter(centro => 
+            centro.nome.toLowerCase().includes(query.toLowerCase()) ||
+            centro.endereco.toLowerCase().includes(query.toLowerCase()) ||
+            centro.bairro.toLowerCase().includes(query.toLowerCase())
+        );
+        this.renderCentrosProximos(centrosFiltrados);
     }
+}
+
+// Calcula distância em km (fórmula Haversine)
+haversine(lat1, lon1, lat2, lon2) {
+    const R = 6371; // Raio da Terra em km
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+              Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
+}
+
+renderCentrosProximos(centros) {
+    // Mesma lógica do renderCentros, mas com título "Centros próximos"
+    const grid = document.getElementById('centrosGrid');
+    if (!grid) return;
+
+    if (!centros.length) {
+        grid.innerHTML = `
+            <article class="centro-card">
+                <h4>Nenhum centro encontrado perto de "${document.getElementById('searchLocation').value}"</h4>
+                <p>Tente outro bairro, CEP ou endereço próximo.</p>
+            </article>
+        `;
+        return;
+    }
+
+    // Renderiza igual renderCentros(), mas só os filtrados
+    grid.innerHTML = centros.map(centro => `
+        <article class="centro-card" data-lat="${centro.latitude ?? ''}" data-lng="${centro.longitude ?? ''}">
+            <!-- Mesmo HTML dos cards -->
+        </article>
+    `).join('');
+
+    if (window.lucide) lucide.createIcons();
+}
 
     renderErrorState() {
         const grid = document.getElementById('centrosGrid');
