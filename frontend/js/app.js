@@ -7,6 +7,7 @@ class DoeJaApp {
         this.map = null;
         this.markers = [];
         this.centrosAtuais = [];
+        this.mapReady = false;
         this.init();
     }
 
@@ -104,8 +105,11 @@ class DoeJaApp {
             this.renderCentros(centros);
             this.renderPagination(pageData);
             this.updateStats(pageData, centros);
-            this.centerMapOnCentros(centros);
             this.populateDynamicFilters(centros);
+
+            if (this.mapReady && this.map) {
+                this.centerMapOnCentros(centros);
+            }
 
         } catch (error) {
             console.error('Erro ao carregar centros:', error);
@@ -295,13 +299,18 @@ class DoeJaApp {
     initMap() {
         if (!window.google || !google.maps) return;
 
-        this.map = new google.maps.Map(document.getElementById('map'), {
+        const mapElement = document.getElementById('map');
+        if (!mapElement) return;
+
+        this.map = new google.maps.Map(mapElement, {
             zoom: 13,
             center: { lat: -23.6261, lng: -46.7917 },
             styles: [
                 { featureType: 'poi', elementType: 'labels', stylers: [{ visibility: 'off' }] }
             ]
         });
+
+        this.mapReady = true;
 
         if (this.centrosAtuais.length) {
             this.centerMapOnCentros(this.centrosAtuais);
@@ -321,7 +330,7 @@ class DoeJaApp {
         this.markers = [];
 
         const centrosComCoordenadas = centros.filter(
-            centro => centro.latitude !== null && centro.longitude !== null
+            centro => Number.isFinite(centro.latitude) && Number.isFinite(centro.longitude)
         );
 
         if (!centrosComCoordenadas.length) return;
@@ -330,20 +339,8 @@ class DoeJaApp {
             const marker = new google.maps.Marker({
                 position: { lat: centro.latitude, lng: centro.longitude },
                 map: this.map,
-                title: centro.nome,
-                icon: {
-                    url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`
-                        <svg width="32" height="40" viewBox="0 0 32 40" xmlns="http://www.w3.org/2000/svg">
-                            <path d="M16 0C7.2 0 0 7.2 0 16c0 6.4 4 11.2 16 20 12-8.8 16-13.6 16-20C32 7.2 24.8 0 16 0z" fill="%232E7D32"/>
-                            ircle cx="16" cy="16" r="8" fill="white"/>
-                            ircle cx="16" cy="16" r="4" fill="%232E7D32"/>
-                        </svg>
-                    `),
-                    scaledSize: new google.maps.Size(32, 40)
-                }
+                title: centro.nome
             });
-
-            this.markers.push(marker);
 
             const infoWindow = new google.maps.InfoWindow({
                 content: `
@@ -359,6 +356,7 @@ class DoeJaApp {
             });
 
             marker.addListener('click', () => infoWindow.open(this.map, marker));
+            this.markers.push(marker);
         });
 
         if (centrosComCoordenadas.length === 1) {
@@ -443,8 +441,8 @@ class DoeJaApp {
     }
 }
 
-    window.app = new DoeJaApp();
+window.app = new DoeJaApp();
 
-    window.initMap = function () {
-        window.app.initMap();
+window.initMap = function () {
+    window.app.initMap();
 };
