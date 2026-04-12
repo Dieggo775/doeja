@@ -10,6 +10,12 @@
     --text-xl: clamp(1.5rem, 1.2rem + 1.25vw, 2.25rem);
     --text-2xl: clamp(2rem, 1.2rem + 2.5vw, 3.5rem);
     --text-hero: clamp(3rem, 0.5rem + 7vw, 8rem);
+    --color-border: #d4d1ca;
+    --color-divider: #dcd9d5;
+    --color-surface-offset: #f3f0ec;
+    --color-success: #437a22;
+    --radius-full: 9999px;
+    --transition-interactive: 180ms cubic-bezier(0.16, 1, 0.3, 1);
 
     /* Spacing 4px */
     --space-1: 0.25rem; --space-2: 0.5rem; --space-3: 0.75rem; --space-4: 1rem;
@@ -38,6 +44,10 @@
     --color-bg: #171614; --color-surface: #1c1b19; --color-surface-2: #201f1d;
     --color-text: #cdccca; --color-text-muted: #797876; --color-text-faint: #5a5957;
     --color-primary: #4CAF50; --color-primary-hover: #66BB6A; --color-primary-active: #81C784;
+    --color-border: #393836;
+    --color-divider: #262523;
+    --color-surface-offset: #1d1c1a;
+    --color-success: #6daa45;
 }
 
 /* Base */
