@@ -72,3 +72,7 @@ node_modules/
 # Logs
 logs/
 *.log
+# Variáveis de ambiente (NUNCA commitar)
+.env
+.env.*
+!.env.example
