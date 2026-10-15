@@ -1,63 +1,57 @@
 class DoeJaApp {
     constructor() {
-        this.API_BASE = 'http://localhost:8081/api';
+        // Caminho relativo: o nginx encaminha /api para o back-end
+        this.API_BASE = '/api';
+
+        // Configurações da busca por localização
+        this.CIDADE_PADRAO = 'Taboão da Serra, SP';
+        this.MAP_CENTER = [-23.6261, -46.7917];
+        this.RAIO_BUSCA_KM = 5;
+
         this.currentPage = 0;
         this.pageSize = 10;
         this.currentFilters = {};
-        this.map = null;
-        this.markers = [];
         this.centrosAtuais = [];
-        this.mapReady = false;
+
+        this.map = null;
+        this.markersLayer = null;
+        this.userMarker = null;
+
         this.init();
     }
 
     async init() {
-        await this.loadIcons();
+        this.loadIcons();
         this.setupEventListeners();
         this.initThemeToggle();
+        this.initMap();
         await this.loadCentros();
     }
 
-    async loadIcons() {
+    loadIcons() {
         if (window.lucide) {
             lucide.createIcons();
         }
     }
 
-    setupEventListeners() {
-        document.getElementById('searchBtn')?.addEventListener('click', () => this.searchByLocation());
-        document.getElementById('applyFilters')?.addEventListener('click', () => this.applyFilters());
-        document.getElementById('clearFilters')?.addEventListener('click', () => this.clearFilters());
+    // ---------- Utilidades ----------
 
-        if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(
-                pos => {
-                    if (this.map) {
-                        this.centerMapOnUser(pos.coords);
-                    }
-                },
-                () => console.log('Geolocalização não permitida')
-            );
-        }
+    // Evita XSS: nunca coloque texto vindo da API no innerHTML sem passar por aqui
+    escapeHtml(value) {
+        return String(value ?? '').replace(/[&<>"']/g, ch => ({
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#39;'
+        }[ch]));
     }
 
-    normalizeCentro(centro) {
-        return {
-            id: centro.id ?? null,
-            nome: centro.nome ?? 'Centro sem nome',
-            endereco: centro.endereco ?? 'Endereço não informado',
-            telefone: centro.telefone ?? 'Telefone não informado',
-            horarioFuncionamento:
-                centro.horarioFuncionamento ??
-                centro.horario_funcionamento ??
-                centro.horario ??
-                'Horário não informado',
-            cidade: centro.cidade ?? this.extractCidade(centro.endereco),
-            bairro: centro.bairro ?? this.extractBairro(centro.endereco),
-            ativo: centro.ativo ?? true,
-            latitude: this.toNumber(centro.latitude),
-            longitude: this.toNumber(centro.longitude)
-        };
+    normalizeText(value) {
+        return String(value ?? '')
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .toLowerCase();
     }
 
     toNumber(value) {
@@ -65,16 +59,76 @@ class DoeJaApp {
         return Number.isFinite(n) ? n : null;
     }
 
-    extractCidade(endereco) {
-        if (!endereco) return 'Cidade não informada';
-        const partes = endereco.split(' - ');
-        return partes[partes.length - 1] || 'Cidade não informada';
+    onlyDigits(value) {
+        return String(value ?? '').replace(/\D/g, '');
     }
 
-    extractBairro(endereco) {
-        if (!endereco) return 'Bairro não informado';
-        const partes = endereco.split(' - ');
-        return partes.length >= 2 ? partes[1] : 'Bairro não informado';
+    // Distância em km entre dois pontos (fórmula de Haversine)
+    haversine(lat1, lon1, lat2, lon2) {
+        const R = 6371;
+        const toRad = deg => deg * Math.PI / 180;
+        const dLat = toRad(lat2 - lat1);
+        const dLon = toRad(lon2 - lon1);
+        const a = Math.sin(dLat / 2) ** 2 +
+                  Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    }
+
+    formatDistancia(km) {
+        return km < 1
+            ? `${Math.round(km * 1000)} m`
+            : `${km.toFixed(1).replace('.', ',')} km`;
+    }
+
+    setNotice(message) {
+        const el = document.getElementById('searchNotice');
+        if (!el) return;
+        el.textContent = message || '';
+        el.hidden = !message;
+    }
+
+    // ---------- Eventos ----------
+
+    setupEventListeners() {
+        document.getElementById('searchBtn')?.addEventListener('click', () => this.searchByLocation());
+        document.getElementById('searchLocation')?.addEventListener('keydown', event => {
+            if (event.key === 'Enter') this.searchByLocation();
+        });
+        document.getElementById('useLocationBtn')?.addEventListener('click', () => this.useMyLocation());
+        document.getElementById('applyFilters')?.addEventListener('click', () => this.applyFilters());
+        document.getElementById('clearFilters')?.addEventListener('click', () => this.clearFilters());
+    }
+
+    initThemeToggle() {
+        const toggle = document.querySelector('[data-theme-toggle]');
+        const html = document.documentElement;
+
+        if (!toggle) return;
+
+        toggle.addEventListener('click', () => {
+            const current = html.getAttribute('data-theme');
+            const next = current === 'dark' ? 'light' : 'dark';
+            html.setAttribute('data-theme', next);
+            toggle.setAttribute('aria-label', `Alternar para modo ${next === 'dark' ? 'claro' : 'escuro'}`);
+        });
+    }
+
+    // ---------- Dados ----------
+
+    normalizeCentro(centro) {
+        return {
+            id: centro.id ?? null,
+            nome: centro.nome ?? 'Centro sem nome',
+            endereco: centro.endereco ?? 'Endereço não informado',
+            telefone: centro.telefone ?? '',
+            horarioFuncionamento: centro.horarioFuncionamento ?? 'Horário não informado',
+            cidade: centro.cidade ?? 'Cidade não informada',
+            bairro: centro.bairro ?? 'Bairro não informado',
+            ativo: centro.ativo ?? true,
+            latitude: this.toNumber(centro.latitude),
+            longitude: this.toNumber(centro.longitude),
+            distanciaKm: null
+        };
     }
 
     async loadCentros(page = 0, filters = {}) {
@@ -82,7 +136,7 @@ class DoeJaApp {
             this.currentPage = page;
 
             const cleanFilters = Object.fromEntries(
-                Object.entries(filters).filter(([_, value]) => value !== '' && value !== null && value !== undefined)
+                Object.entries(filters).filter(([, value]) => value !== '' && value !== null && value !== undefined)
             );
 
             const params = new URLSearchParams({
@@ -102,13 +156,15 @@ class DoeJaApp {
 
             this.centrosAtuais = centros;
 
+            this.setNotice('');
             this.renderCentros(centros);
             this.renderPagination(pageData);
-            this.updateStats(pageData, centros);
-            this.populateDynamicFilters(centros);
+            this.renderMarkers(centros);
 
-            if (this.mapReady && this.map) {
-                this.centerMapOnCentros(centros);
+            // Só monta as opções dos filtros quando não há filtro ativo,
+            // senão as listas encolhem para o valor já filtrado.
+            if (Object.keys(cleanFilters).length === 0) {
+                this.populateDynamicFilters(centros);
             }
 
         } catch (error) {
@@ -117,9 +173,10 @@ class DoeJaApp {
         }
     }
 
+    // ---------- Renderização ----------
+
     renderCentros(centros) {
         const grid = document.getElementById('centrosGrid');
-
         if (!grid) return;
 
         if (!centros.length) {
@@ -130,7 +187,7 @@ class DoeJaApp {
                     </header>
                     <div class="centro-info">
                         <div class="centro-info-item">
-                            <span>Tente alterar os filtros ou verificar se existem dados cadastrados.</span>
+                            <span>Tente alterar os filtros ou buscar outro bairro.</span>
                         </div>
                     </div>
                 </article>
@@ -138,11 +195,30 @@ class DoeJaApp {
             return;
         }
 
-        grid.innerHTML = centros.map(centro => `
-            <article class="centro-card" data-lat="${centro.latitude ?? ''}" data-lng="${centro.longitude ?? ''}">
+        grid.innerHTML = centros.map(centro => {
+            const tel = this.onlyDigits(centro.telefone);
+            const temCoordenadas = Number.isFinite(centro.latitude) && Number.isFinite(centro.longitude);
+
+            const distanciaHtml = Number.isFinite(centro.distanciaKm) ? `
+                    <div class="centro-info-item">
+                        <i data-lucide="navigation"></i>
+                        <span class="centro-distancia">A ${this.escapeHtml(this.formatDistancia(centro.distanciaKm))} de você</span>
+                    </div>` : '';
+
+            const ligarHtml = tel.length >= 8
+                ? `<a href="tel:${this.escapeHtml(tel)}" class="pagination-btn">Ligar</a>`
+                : '';
+
+            const rotaHtml = temCoordenadas
+                ? `<a href="https://www.google.com/maps/search/?api=1&query=${centro.latitude},${centro.longitude}"
+                       target="_blank" rel="noopener noreferrer" class="pagination-btn">Como chegar</a>`
+                : '';
+
+            return `
+            <article class="centro-card" data-lat="${temCoordenadas ? centro.latitude : ''}" data-lng="${temCoordenadas ? centro.longitude : ''}">
                 <header class="centro-header">
                     <div>
-                        <h4 class="centro-nome">${centro.nome}</h4>
+                        <h4 class="centro-nome">${this.escapeHtml(centro.nome)}</h4>
                         <span class="centro-status ${centro.ativo ? 'status-ativo' : ''}">
                             ${centro.ativo ? 'Ativo' : 'Inativo'}
                         </span>
@@ -152,32 +228,31 @@ class DoeJaApp {
                 <div class="centro-info">
                     <div class="centro-info-item">
                         <i data-lucide="map-pin"></i>
-                        <span>${centro.endereco}</span>
+                        <span>${this.escapeHtml(centro.endereco)}</span>
                     </div>
                     <div class="centro-info-item">
                         <i data-lucide="building-2"></i>
-                        <span>${centro.bairro} - ${centro.cidade}</span>
+                        <span>${this.escapeHtml(centro.bairro)} - ${this.escapeHtml(centro.cidade)}</span>
                     </div>
                     <div class="centro-info-item">
                         <i data-lucide="phone"></i>
-                        <span>${centro.telefone}</span>
+                        <span>${this.escapeHtml(centro.telefone || 'Telefone não informado')}</span>
                     </div>
                     <div class="centro-info-item">
                         <i data-lucide="clock"></i>
-                        <span>${centro.horarioFuncionamento}</span>
-                    </div>
+                        <span>${this.escapeHtml(centro.horarioFuncionamento)}</span>
+                    </div>${distanciaHtml}
                 </div>
 
                 <div class="centro-actions">
-                    <button class="pagination-btn" onclick="app.viewOnMap(this)">Ver no mapa</button>
-                    <a href="tel:${String(centro.telefone).replace(/\D/g, '')}" class="pagination-btn">Ligar</a>
+                    <button class="pagination-btn" type="button" onclick="app.viewOnMap(this)">Ver no mapa</button>
+                    ${rotaHtml}
+                    ${ligarHtml}
                 </div>
-            </article>
-        `).join('');
+            </article>`;
+        }).join('');
 
-        if (window.lucide) {
-            lucide.createIcons();
-        }
+        this.loadIcons();
     }
 
     renderPagination(pageData) {
@@ -195,7 +270,7 @@ class DoeJaApp {
 
         for (let i = 0; i < totalPages; i++) {
             pagesHtml += `
-                <button class="pagination-btn ${i === this.currentPage ? 'active' : ''}"
+                <button class="pagination-btn ${i === this.currentPage ? 'active' : ''}" type="button"
                         onclick="app.loadCentros(${i}, app.currentFilters)">
                     ${i + 1}
                 </button>
@@ -205,43 +280,31 @@ class DoeJaApp {
         pagination.innerHTML = pagesHtml;
     }
 
-    updateStats(pageData, centros) {
-        const stats = document.querySelectorAll('.stat-number');
-        if (!stats.length) return;
+    renderErrorState() {
+        const grid = document.getElementById('centrosGrid');
+        const pagination = document.getElementById('pagination');
 
-        const ativos = centros.filter(c => c.ativo).length;
-        const total = pageData.totalElements ?? centros.length;
+        if (grid) {
+            grid.innerHTML = `
+                <article class="centro-card">
+                    <header class="centro-header">
+                        <h4 class="centro-nome">Erro ao carregar centros</h4>
+                    </header>
+                    <div class="centro-info">
+                        <div class="centro-info-item">
+                            <span>Verifique se o back-end está ativo (docker compose ps) e se o proxy /api do nginx está correto.</span>
+                        </div>
+                    </div>
+                </article>
+            `;
+        }
 
-        if (stats[0]) stats[0].dataset.target = ativos;
-        if (stats[1]) stats[1].dataset.target = total;
-        if (stats[2] && !stats[2].dataset.fixed) stats[2].dataset.target = total * 10;
-
-        this.animateStats();
+        if (pagination) {
+            pagination.innerHTML = '';
+        }
     }
 
-    animateStats() {
-        const animate = (el, target, duration = 1200) => {
-            let start = 0;
-            const increment = target / (duration / 16);
-
-            const timer = setInterval(() => {
-                start += increment;
-
-                if (start >= target) {
-                    el.textContent = Number(target).toLocaleString('pt-BR');
-                    clearInterval(timer);
-                } else {
-                    el.textContent = Math.floor(start).toLocaleString('pt-BR');
-                }
-            }, 16);
-        };
-
-        document.querySelectorAll('.stat-number').forEach(stat => {
-            const target = parseInt(stat.dataset.target || '0', 10);
-            stat.textContent = '0';
-            animate(stat, target);
-        });
-    }
+    // ---------- Filtros ----------
 
     populateDynamicFilters(centros) {
         const cidadeFilter = document.getElementById('cidadeFilter');
@@ -252,17 +315,12 @@ class DoeJaApp {
         const cidades = [...new Set(centros.map(c => c.cidade).filter(Boolean))].sort();
         const bairros = [...new Set(centros.map(c => c.bairro).filter(Boolean))].sort();
 
-        const cidadeAtual = cidadeFilter.value;
-        const bairroAtual = bairroFilter.value;
+        const opcoes = (lista) => lista
+            .map(item => `<option value="${this.escapeHtml(item)}">${this.escapeHtml(item)}</option>`)
+            .join('');
 
-        cidadeFilter.innerHTML = `<option value="">Todas as cidades</option>` +
-            cidades.map(cidade => `<option value="${cidade}">${cidade}</option>`).join('');
-
-        bairroFilter.innerHTML = `<option value="">Todos os bairros</option>` +
-            bairros.map(bairro => `<option value="${bairro}">${bairro}</option>`).join('');
-
-        cidadeFilter.value = cidades.includes(cidadeAtual) ? cidadeAtual : '';
-        bairroFilter.value = bairros.includes(bairroAtual) ? bairroAtual : '';
+        cidadeFilter.innerHTML = `<option value="">Todas as cidades</option>${opcoes(cidades)}`;
+        bairroFilter.innerHTML = `<option value="">Todos os bairros</option>${opcoes(bairros)}`;
     }
 
     async applyFilters() {
@@ -278,101 +336,80 @@ class DoeJaApp {
         document.getElementById('cidadeFilter').value = '';
         document.getElementById('bairroFilter').value = '';
         document.getElementById('ativoFilter').value = '';
+        document.getElementById('searchLocation').value = '';
         this.currentFilters = {};
+        this.removeUserMarker();
         this.loadCentros(0, {});
     }
 
-    initThemeToggle() {
-        const toggle = document.querySelector('[data-theme-toggle]');
-        const html = document.documentElement;
-
-        if (!toggle) return;
-
-        toggle.addEventListener('click', () => {
-            const current = html.getAttribute('data-theme');
-            const next = current === 'dark' ? 'light' : 'dark';
-            html.setAttribute('data-theme', next);
-            toggle.setAttribute('aria-label', `Alternar para modo ${next === 'dark' ? 'claro' : 'escuro'}`);
-        });
-    }
+    // ---------- Mapa (Leaflet + OpenStreetMap) ----------
 
     initMap() {
-        if (!window.google || !google.maps) return;
-
         const mapElement = document.getElementById('map');
-        if (!mapElement) return;
 
-        this.map = new google.maps.Map(mapElement, {
-            zoom: 13,
-            center: { lat: -23.6261, lng: -46.7917 },
-            styles: [
-                { featureType: 'poi', elementType: 'labels', stylers: [{ visibility: 'off' }] }
-            ]
-        });
-
-        this.mapReady = true;
-
-        if (this.centrosAtuais.length) {
-            this.centerMapOnCentros(this.centrosAtuais);
-        }
-    }
-
-    centerMapOnUser(coords) {
-        if (!this.map) return;
-        this.map.setCenter({ lat: coords.latitude, lng: coords.longitude });
-        this.map.setZoom(14);
-    }
-
-    centerMapOnCentros(centros) {
-        if (!this.map || !centros.length) return;
-
-        this.markers.forEach(marker => marker.setMap(null));
-        this.markers = [];
-
-        const centrosComCoordenadas = centros.filter(
-            centro => Number.isFinite(centro.latitude) && Number.isFinite(centro.longitude)
-        );
-
-        if (!centrosComCoordenadas.length) return;
-
-        centrosComCoordenadas.forEach(centro => {
-            const marker = new google.maps.Marker({
-                position: { lat: centro.latitude, lng: centro.longitude },
-                map: this.map,
-                title: centro.nome
-            });
-
-            const infoWindow = new google.maps.InfoWindow({
-                content: `
-                    <div style="padding: 8px; max-width: 220px;">
-                        <h4 style="margin: 0 0 6px 0; font-size: 14px;">${centro.nome}</h4>
-                        <p style="margin: 0 0 6px 0; font-size: 12px; color: #666;">${centro.endereco}</p>
-                        <p style="margin: 0 0 6px 0; font-size: 12px;">${centro.horarioFuncionamento}</p>
-                        <a href="tel:${String(centro.telefone).replace(/\D/g, '')}" style="color: #2E7D32; text-decoration: none; font-size: 12px;">
-                            📞 ${centro.telefone}
-                        </a>
-                    </div>
-                `
-            });
-
-            marker.addListener('click', () => infoWindow.open(this.map, marker));
-            this.markers.push(marker);
-        });
-
-        if (centrosComCoordenadas.length === 1) {
-            this.map.setCenter({
-                lat: centrosComCoordenadas[0].latitude,
-                lng: centrosComCoordenadas[0].longitude
-            });
-            this.map.setZoom(15);
+        if (!mapElement || !window.L) {
+            console.warn('Leaflet não carregou: o mapa ficará desativado.');
             return;
         }
 
-        const bounds = new google.maps.LatLngBounds();
-        centrosComCoordenadas.forEach(centro => {
-            bounds.extend({ lat: centro.latitude, lng: centro.longitude });
+        this.map = L.map(mapElement).setView(this.MAP_CENTER, 13);
+
+        L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+        }).addTo(this.map);
+
+        this.markersLayer = L.layerGroup().addTo(this.map);
+    }
+
+    renderMarkers(centros, extraPoint = null) {
+        if (!this.map) return;
+
+        this.markersLayer.clearLayers();
+
+        const pontos = centros.filter(c => Number.isFinite(c.latitude) && Number.isFinite(c.longitude));
+
+        pontos.forEach(centro => {
+            const tel = this.onlyDigits(centro.telefone);
+            const ligar = tel.length >= 8
+                ? `<br><a href="tel:${this.escapeHtml(tel)}">${this.escapeHtml(centro.telefone)}</a>`
+                : '';
+
+            L.marker([centro.latitude, centro.longitude])
+                .addTo(this.markersLayer)
+                .bindPopup(`
+                    <strong>${this.escapeHtml(centro.nome)}</strong><br>
+                    ${this.escapeHtml(centro.endereco)}<br>
+                    ${this.escapeHtml(centro.horarioFuncionamento)}${ligar}
+                `);
         });
-        this.map.fitBounds(bounds);
+
+        const coords = pontos.map(c => [c.latitude, c.longitude]);
+        if (extraPoint) coords.push(extraPoint);
+
+        if (coords.length === 1) {
+            this.map.setView(coords[0], 15);
+        } else if (coords.length > 1) {
+            this.map.fitBounds(L.latLngBounds(coords), { padding: [40, 40] });
+        }
+    }
+
+    setUserMarker(lat, lng, rotulo) {
+        if (!this.map) return;
+        this.removeUserMarker();
+
+        this.userMarker = L.circleMarker([lat, lng], {
+            radius: 9,
+            weight: 3,
+            fillOpacity: 0.8
+        }).addTo(this.map).bindPopup(this.escapeHtml(rotulo || 'Você está aqui'));
+    }
+
+    removeUserMarker() {
+        if (this.userMarker && this.map) {
+            this.map.removeLayer(this.userMarker);
+        }
+        this.userMarker = null;
     }
 
     viewOnMap(btn) {
@@ -387,120 +424,101 @@ class DoeJaApp {
             return;
         }
 
-        this.map.setCenter({ lat, lng });
-        this.map.setZoom(16);
+        this.map.setView([lat, lng], 16);
         document.getElementById('map')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 
-    async searchByLocation() {
-    const query = document.getElementById('searchLocation')?.value?.trim();
-    if (!query || !this.map || !window.google || !google.maps) return;
+    // ---------- Busca por localização ----------
+    // OBS: por enquanto o cálculo de distância usa apenas os centros da página carregada.
+    // Na próxima etapa isso passa para o back-end (/api/centros/proximos).
 
-    try {
-        // 1. Centraliza o mapa na busca
-        const geocoder = new google.maps.Geocoder();
-        const results = await new Promise((resolve, reject) => {
-            geocoder.geocode({ address: `${query}, São Paulo, Brasil` }, (result, status) => {
-                if (status === 'OK') resolve(result);
-                else reject(new Error(`Geocode falhou: ${status}`));
-            });
-        });
-
-        if (results[0]) {
-            const location = results[0].geometry.location;
-            this.map.setCenter(location);
-            this.map.setZoom(14);
+    useMyLocation() {
+        if (!navigator.geolocation) {
+            alert('Seu navegador não suporta geolocalização.');
+            return;
         }
 
-        // 2. FILTRA os centros próximos à localização
-        const centrosProximos = this.centrosAtuais.filter(centro => {
-            if (!Number.isFinite(centro.latitude) || !Number.isFinite(centro.longitude)) return false;
-            
-            const distancia = this.haversine(
-                results[0].geometry.location.lat(), results[0].geometry.location.lng(),
-                centro.latitude, centro.longitude
-            );
-            return distancia <= 5; // 5km de raio
-        });
+        if (!window.isSecureContext) {
+            alert('O navegador só libera a localização em HTTPS ou em localhost. ' +
+                  `Acesse por http://localhost:${location.port} usando o encaminhamento de portas do VS Code.`);
+            return;
+        }
 
-        this.renderCentrosProximos(centrosProximos);
-        
-    } catch (error) {
-        console.error('Erro na busca:', error);
-        // Fallback: filtra por texto no nome/endereço
-        const centrosFiltrados = this.centrosAtuais.filter(centro => 
-            centro.nome.toLowerCase().includes(query.toLowerCase()) ||
-            centro.endereco.toLowerCase().includes(query.toLowerCase()) ||
-            centro.bairro.toLowerCase().includes(query.toLowerCase())
+        this.setNotice('Obtendo sua localização...');
+
+        navigator.geolocation.getCurrentPosition(
+            pos => this.showNearby(pos.coords.latitude, pos.coords.longitude, 'Você está aqui'),
+            () => this.setNotice('Não foi possível obter sua localização. Verifique a permissão do navegador.'),
+            { timeout: 10000 }
         );
-        this.renderCentrosProximos(centrosFiltrados);
-    }
-}
-
-// Calcula distância em km (fórmula Haversine)
-haversine(lat1, lon1, lat2, lon2) {
-    const R = 6371; // Raio da Terra em km
-    const dLat = (lat2 - lat1) * Math.PI / 180;
-    const dLon = (lon2 - lon1) * Math.PI / 180;
-    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
-              Math.sin(dLon/2) * Math.sin(dLon/2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-    return R * c;
-}
-
-renderCentrosProximos(centros) {
-    // Mesma lógica do renderCentros, mas com título "Centros próximos"
-    const grid = document.getElementById('centrosGrid');
-    if (!grid) return;
-
-    if (!centros.length) {
-        grid.innerHTML = `
-            <article class="centro-card">
-                <h4>Nenhum centro encontrado perto de "${document.getElementById('searchLocation').value}"</h4>
-                <p>Tente outro bairro, CEP ou endereço próximo.</p>
-            </article>
-        `;
-        return;
     }
 
-    // Renderiza igual renderCentros(), mas só os filtrados
-    grid.innerHTML = centros.map(centro => `
-        <article class="centro-card" data-lat="${centro.latitude ?? ''}" data-lng="${centro.longitude ?? ''}">
-            <!-- Mesmo HTML dos cards -->
-        </article>
-    `).join('');
+    async geocode(query) {
+        const params = new URLSearchParams({
+            format: 'jsonv2',
+            limit: '1',
+            countrycodes: 'br',
+            q: `${query}, ${this.CIDADE_PADRAO}`
+        });
 
-    if (window.lucide) lucide.createIcons();
-}
-
-    renderErrorState() {
-        const grid = document.getElementById('centrosGrid');
-        const pagination = document.getElementById('pagination');
-
-        if (grid) {
-            grid.innerHTML = `
-                <article class="centro-card">
-                    <header class="centro-header">
-                        <h4 class="centro-nome">Erro ao carregar centros</h4>
-                    </header>
-                    <div class="centro-info">
-                        <div class="centro-info-item">
-                            <span>Verifique se o backend está ativo e se o proxy /api está configurado corretamente.</span>
-                        </div>
-                    </div>
-                </article>
-            `;
+        const response = await fetch(`https://nominatim.openstreetmap.org/search?${params.toString()}`);
+        if (!response.ok) {
+            throw new Error(`Geocodificação falhou: HTTP ${response.status}`);
         }
 
-        if (pagination) {
-            pagination.innerHTML = '';
+        const results = await response.json();
+        if (!results.length) return null;
+
+        return { lat: parseFloat(results[0].lat), lng: parseFloat(results[0].lon) };
+    }
+
+    async searchByLocation() {
+        const query = document.getElementById('searchLocation')?.value?.trim();
+        if (!query) return;
+
+        this.setNotice('Buscando...');
+
+        try {
+            const ponto = await this.geocode(query);
+            if (ponto) {
+                this.showNearby(ponto.lat, ponto.lng, query);
+                return;
+            }
+        } catch (error) {
+            console.error('Erro na geocodificação:', error);
         }
+
+        // Plano B: filtra por texto (nome, endereço, bairro, cidade)
+        const termo = this.normalizeText(query);
+        const filtrados = this.centrosAtuais.filter(c =>
+            this.normalizeText(`${c.nome} ${c.endereco} ${c.bairro} ${c.cidade}`).includes(termo)
+        );
+
+        this.renderCentros(filtrados);
+        this.renderMarkers(filtrados);
+        this.setNotice(filtrados.length
+            ? `Resultados para "${query}"`
+            : `Nenhum centro encontrado para "${query}".`);
+    }
+
+    showNearby(lat, lng, rotulo) {
+        this.setUserMarker(lat, lng, rotulo);
+
+        const ordenados = this.centrosAtuais
+            .filter(c => Number.isFinite(c.latitude) && Number.isFinite(c.longitude))
+            .map(c => ({ ...c, distanciaKm: this.haversine(lat, lng, c.latitude, c.longitude) }))
+            .sort((a, b) => a.distanciaKm - b.distanciaKm);
+
+        const dentroDoRaio = ordenados.filter(c => c.distanciaKm <= this.RAIO_BUSCA_KM);
+        const lista = dentroDoRaio.length ? dentroDoRaio : ordenados;
+
+        this.renderCentros(lista);
+        this.renderMarkers(lista, [lat, lng]);
+
+        this.setNotice(dentroDoRaio.length
+            ? `${dentroDoRaio.length} centro(s) em até ${this.RAIO_BUSCA_KM} km`
+            : `Nenhum centro em até ${this.RAIO_BUSCA_KM} km. Mostrando os mais próximos.`);
     }
 }
 
 window.app = new DoeJaApp();
-
-window.initMap = function () {
-    window.app.initMap();
-};
