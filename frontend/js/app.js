@@ -7,6 +7,7 @@ class DoeJaApp {
         this.CIDADE_PADRAO = 'Taboão da Serra, SP';
         this.MAP_CENTER = [-23.6261, -46.7917];
         this.RAIO_BUSCA_KM = 5;
+        this.RAIO_MAXIMO_KM = 50;
 
         this.currentPage = 0;
         this.pageSize = 10;
@@ -47,31 +48,14 @@ class DoeJaApp {
         }[ch]));
     }
 
-    normalizeText(value) {
-        return String(value ?? '')
-            .normalize('NFD')
-            .replace(/[\u0300-\u036f]/g, '')
-            .toLowerCase();
-    }
-
     toNumber(value) {
+        if (value === null || value === undefined || value === '') return null;
         const n = Number(value);
         return Number.isFinite(n) ? n : null;
     }
 
     onlyDigits(value) {
         return String(value ?? '').replace(/\D/g, '');
-    }
-
-    // Distância em km entre dois pontos (fórmula de Haversine)
-    haversine(lat1, lon1, lat2, lon2) {
-        const R = 6371;
-        const toRad = deg => deg * Math.PI / 180;
-        const dLat = toRad(lat2 - lat1);
-        const dLon = toRad(lon2 - lon1);
-        const a = Math.sin(dLat / 2) ** 2 +
-                  Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
-        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     }
 
     formatDistancia(km) {
@@ -121,13 +105,14 @@ class DoeJaApp {
             nome: centro.nome ?? 'Centro sem nome',
             endereco: centro.endereco ?? 'Endereço não informado',
             telefone: centro.telefone ?? '',
+            whatsapp: this.onlyDigits(centro.whatsapp),
             horarioFuncionamento: centro.horarioFuncionamento ?? 'Horário não informado',
             cidade: centro.cidade ?? 'Cidade não informada',
             bairro: centro.bairro ?? 'Bairro não informado',
             ativo: centro.ativo ?? true,
             latitude: this.toNumber(centro.latitude),
             longitude: this.toNumber(centro.longitude),
-            distanciaKm: null
+            distanciaKm: this.toNumber(centro.distanciaKm)
         };
     }
 
@@ -209,6 +194,12 @@ class DoeJaApp {
                 ? `<a href="tel:${this.escapeHtml(tel)}" class="pagination-btn">Ligar</a>`
                 : '';
 
+            const mensagemZap = 'Olá! Vi o centro no DoeJá e gostaria de doar.';
+            const whatsappHtml = centro.whatsapp.length >= 10 && centro.whatsapp.length <= 15
+                ? `<a href="https://wa.me/${centro.whatsapp}?text=${encodeURIComponent(mensagemZap)}"
+                       target="_blank" rel="noopener noreferrer" class="pagination-btn">WhatsApp</a>`
+                : '';
+
             const rotaHtml = temCoordenadas
                 ? `<a href="https://www.google.com/maps/search/?api=1&query=${centro.latitude},${centro.longitude}"
                        target="_blank" rel="noopener noreferrer" class="pagination-btn">Como chegar</a>`
@@ -246,6 +237,7 @@ class DoeJaApp {
 
                 <div class="centro-actions">
                     <button class="pagination-btn" type="button" onclick="app.viewOnMap(this)">Ver no mapa</button>
+                    ${whatsappHtml}
                     ${rotaHtml}
                     ${ligarHtml}
                 </div>
@@ -429,8 +421,7 @@ class DoeJaApp {
     }
 
     // ---------- Busca por localização ----------
-    // OBS: por enquanto o cálculo de distância usa apenas os centros da página carregada.
-    // Na próxima etapa isso passa para o back-end (/api/centros/proximos).
+    // A distância é calculada no servidor (/api/centros/proximos).
 
     useMyLocation() {
         if (!navigator.geolocation) {
@@ -488,36 +479,60 @@ class DoeJaApp {
             console.error('Erro na geocodificação:', error);
         }
 
-        // Plano B: filtra por texto (nome, endereço, bairro, cidade)
-        const termo = this.normalizeText(query);
-        const filtrados = this.centrosAtuais.filter(c =>
-            this.normalizeText(`${c.nome} ${c.endereco} ${c.bairro} ${c.cidade}`).includes(termo)
-        );
-
-        this.renderCentros(filtrados);
-        this.renderMarkers(filtrados);
-        this.setNotice(filtrados.length
-            ? `Resultados para "${query}"`
+        // Plano B: o endereço não foi achado no mapa; procura pelo nome do bairro no servidor
+        this.currentFilters = { bairro: query };
+        await this.loadCentros(0, this.currentFilters);
+        this.setNotice(this.centrosAtuais.length
+            ? `Resultados para o bairro "${query}"`
             : `Nenhum centro encontrado para "${query}".`);
     }
 
-    showNearby(lat, lng, rotulo) {
+    async buscarProximos(lat, lng, raioKm) {
+        const params = new URLSearchParams({
+            lat: lat.toString(),
+            lng: lng.toString(),
+            raioKm: raioKm.toString(),
+            limite: '20'
+        });
+
+        const response = await fetch(`${this.API_BASE}/centros/proximos?${params.toString()}`);
+        if (!response.ok) {
+            throw new Error(`Erro HTTP ${response.status}`);
+        }
+
+        const dados = await response.json();
+        return dados.map(centro => this.normalizeCentro(centro));
+    }
+
+    async showNearby(lat, lng, rotulo) {
         this.setUserMarker(lat, lng, rotulo);
 
-        const ordenados = this.centrosAtuais
-            .filter(c => Number.isFinite(c.latitude) && Number.isFinite(c.longitude))
-            .map(c => ({ ...c, distanciaKm: this.haversine(lat, lng, c.latitude, c.longitude) }))
-            .sort((a, b) => a.distanciaKm - b.distanciaKm);
+        try {
+            let raio = this.RAIO_BUSCA_KM;
+            let lista = await this.buscarProximos(lat, lng, raio);
+            let ampliou = false;
 
-        const dentroDoRaio = ordenados.filter(c => c.distanciaKm <= this.RAIO_BUSCA_KM);
-        const lista = dentroDoRaio.length ? dentroDoRaio : ordenados;
+            // Nada por perto: amplia a busca até o limite do servidor
+            if (!lista.length && raio < this.RAIO_MAXIMO_KM) {
+                raio = this.RAIO_MAXIMO_KM;
+                lista = await this.buscarProximos(lat, lng, raio);
+                ampliou = true;
+            }
 
-        this.renderCentros(lista);
-        this.renderMarkers(lista, [lat, lng]);
+            this.renderCentros(lista);
+            this.renderMarkers(lista, [lat, lng]);
 
-        this.setNotice(dentroDoRaio.length
-            ? `${dentroDoRaio.length} centro(s) em até ${this.RAIO_BUSCA_KM} km`
-            : `Nenhum centro em até ${this.RAIO_BUSCA_KM} km. Mostrando os mais próximos.`);
+            if (!lista.length) {
+                this.setNotice(`Nenhum centro encontrado em até ${raio} km.`);
+            } else if (ampliou) {
+                this.setNotice(`Nenhum centro em até ${this.RAIO_BUSCA_KM} km. Mostrando os mais próximos (até ${raio} km).`);
+            } else {
+                this.setNotice(`${lista.length} centro(s) em até ${raio} km`);
+            }
+        } catch (error) {
+            console.error('Erro ao buscar centros próximos:', error);
+            this.setNotice('Não foi possível buscar os centros próximos. Tente novamente.');
+        }
     }
 }
 

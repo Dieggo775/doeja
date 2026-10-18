@@ -22,6 +22,10 @@ public class CentroDoacaoMapper {
     }
 
     public static CentroDoacaoResponseDTO toResponseDTO(CentroDoacao centro) {
+        return toResponseDTO(centro, null);
+    }
+
+    public static CentroDoacaoResponseDTO toResponseDTO(CentroDoacao centro, Double distanciaKm) {
         return new CentroDoacaoResponseDTO(
                 centro.getId(),
                 centro.getNome(),
@@ -32,10 +36,12 @@ public class CentroDoacaoMapper {
                 centro.getEstado(),
                 centro.getCep(),
                 centro.getTelefone(),
+                centro.getWhatsapp(),
                 centro.getHorarioFuncionamento(),
                 centro.getLatitude(),
                 centro.getLongitude(),
-                centro.getAtivo()
+                centro.getAtivo(),
+                distanciaKm
         );
     }
 }
