@@ -5,7 +5,7 @@ class DoeJaApp {
 
         // Configurações da busca por localização
         this.CIDADE_PADRAO = 'Taboão da Serra, SP';
-        this.MAP_CENTER = [-23.6261, -46.7917];
+        this.MAP_CENTER = [-23.6165, -46.7750];
         this.RAIO_BUSCA_KM = 5;
         this.RAIO_MAXIMO_KM = 50;
 
@@ -13,6 +13,8 @@ class DoeJaApp {
         this.pageSize = 10;
         this.currentFilters = {};
         this.centrosAtuais = [];
+        this.centrosPorId = new Map();
+        this.categorias = [];
 
         this.map = null;
         this.markersLayer = null;
@@ -26,7 +28,7 @@ class DoeJaApp {
         this.setupEventListeners();
         this.initThemeToggle();
         this.initMap();
-        await this.loadCentros();
+        await Promise.all([this.loadCategorias(), this.loadCentros()]);
     }
 
     loadIcons() {
@@ -103,6 +105,8 @@ class DoeJaApp {
         return {
             id: centro.id ?? null,
             nome: centro.nome ?? 'Centro sem nome',
+            descricao: centro.descricao ?? '',
+            necessidades: Array.isArray(centro.necessidades) ? centro.necessidades : [],
             endereco: centro.endereco ?? 'Endereço não informado',
             telefone: centro.telefone ?? '',
             whatsapp: this.onlyDigits(centro.whatsapp),
@@ -114,6 +118,24 @@ class DoeJaApp {
             longitude: this.toNumber(centro.longitude),
             distanciaKm: this.toNumber(centro.distanciaKm)
         };
+    }
+
+    async loadCategorias() {
+        try {
+            this.categorias = await Api.get('/categorias', { autenticar: false });
+            const select = document.getElementById('categoriaFilter');
+            if (select) {
+                select.innerHTML = '<option value="">O que doar?</option>' + this.categorias
+                    .map(c => `<option value="${this.escapeHtml(c.slug)}">${this.escapeHtml(c.nome)}</option>`)
+                    .join('');
+            }
+        } catch (error) {
+            console.error('Erro ao carregar categorias:', error);
+        }
+    }
+
+    lembrarCentros(centros) {
+        centros.forEach(c => this.centrosPorId.set(c.id, c));
     }
 
     async loadCentros(page = 0, filters = {}) {
@@ -140,6 +162,7 @@ class DoeJaApp {
             const centros = (pageData.content || []).map(centro => this.normalizeCentro(centro));
 
             this.centrosAtuais = centros;
+            this.lembrarCentros(centros);
 
             this.setNotice('');
             this.renderCentros(centros);
@@ -200,6 +223,21 @@ class DoeJaApp {
                        target="_blank" rel="noopener noreferrer" class="pagination-btn">WhatsApp</a>`
                 : '';
 
+            const necessidadesHtml = centro.necessidades.length ? `
+                <ul class="necessidades" aria-label="O que este centro precisa">
+                    ${centro.necessidades.map(n => `
+                        <li class="tag ${n.tipo === 'PRECISA' ? 'tag-precisa' : 'tag-aceita'} ${n.urgente ? 'tag-urgente' : ''}"
+                            title="${this.escapeHtml(n.descricao || '')}">
+                            ${n.urgente ? '<strong>Urgente:</strong> ' : ''}${this.escapeHtml(n.categoriaNome)}${n.descricao ? ` <span class="tag-desc">- ${this.escapeHtml(n.descricao)}</span>` : ''}
+                        </li>`).join('')}
+                </ul>` : '';
+
+            const doarHtml = centro.ativo
+                ? `<button class="filter-btn" type="button" onclick="areas.abrirDoacao(${Number(centro.id)})">
+                       <i data-lucide="heart-handshake"></i> Quero doar
+                   </button>`
+                : '';
+
             const rotaHtml = temCoordenadas
                 ? `<a href="https://www.google.com/maps/search/?api=1&query=${centro.latitude},${centro.longitude}"
                        target="_blank" rel="noopener noreferrer" class="pagination-btn">Como chegar</a>`
@@ -211,10 +249,13 @@ class DoeJaApp {
                     <div>
                         <h4 class="centro-nome">${this.escapeHtml(centro.nome)}</h4>
                         <span class="centro-status ${centro.ativo ? 'status-ativo' : ''}">
-                            ${centro.ativo ? 'Ativo' : 'Inativo'}
+                            ${centro.ativo ? 'Recebendo doações' : 'Pausado'}
                         </span>
                     </div>
                 </header>
+
+                ${centro.descricao ? `<p class="centro-descricao">${this.escapeHtml(centro.descricao)}</p>` : ''}
+                ${necessidadesHtml}
 
                 <div class="centro-info">
                     <div class="centro-info-item">
@@ -236,6 +277,7 @@ class DoeJaApp {
                 </div>
 
                 <div class="centro-actions">
+                    ${doarHtml}
                     <button class="pagination-btn" type="button" onclick="app.viewOnMap(this)">Ver no mapa</button>
                     ${whatsappHtml}
                     ${rotaHtml}
@@ -284,7 +326,7 @@ class DoeJaApp {
                     </header>
                     <div class="centro-info">
                         <div class="centro-info-item">
-                            <span>Verifique se o back-end está ativo (docker compose ps) e se o proxy /api do nginx está correto.</span>
+                            <span>O serviço está indisponível no momento. Tente novamente em alguns instantes.</span>
                         </div>
                     </div>
                 </article>
@@ -319,8 +361,9 @@ class DoeJaApp {
         const cidade = document.getElementById('cidadeFilter')?.value || '';
         const bairro = document.getElementById('bairroFilter')?.value || '';
         const ativo = document.getElementById('ativoFilter')?.value || '';
+        const categoria = document.getElementById('categoriaFilter')?.value || '';
 
-        this.currentFilters = { cidade, bairro, ativo };
+        this.currentFilters = { cidade, bairro, ativo, categoria };
         await this.loadCentros(0, this.currentFilters);
     }
 
@@ -328,6 +371,7 @@ class DoeJaApp {
         document.getElementById('cidadeFilter').value = '';
         document.getElementById('bairroFilter').value = '';
         document.getElementById('ativoFilter').value = '';
+        document.getElementById('categoriaFilter').value = '';
         document.getElementById('searchLocation').value = '';
         this.currentFilters = {};
         this.removeUserMarker();
@@ -519,6 +563,7 @@ class DoeJaApp {
                 ampliou = true;
             }
 
+            this.lembrarCentros(lista);
             this.renderCentros(lista);
             this.renderMarkers(lista, [lat, lng]);
 

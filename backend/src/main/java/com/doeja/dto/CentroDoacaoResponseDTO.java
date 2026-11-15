@@ -1,10 +1,12 @@
 package com.doeja.dto;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
+import java.util.List;
+
+import com.doeja.entity.StatusCentro;
 
 /**
- * O que a API devolve para o público sobre um centro.
- * "distanciaKm" só aparece na busca por proximidade.
+ * Centro como a API devolve. "distanciaKm" só vem preenchido na busca por proximidade.
+ * "status" interessa ao responsável e ao admin; para o público é sempre APROVADO.
  */
 public record CentroDoacaoResponseDTO(
         Long id,
@@ -21,6 +23,8 @@ public record CentroDoacaoResponseDTO(
         Double latitude,
         Double longitude,
         Boolean ativo,
-        @JsonInclude(JsonInclude.Include.NON_NULL) Double distanciaKm
+        Double distanciaKm,
+        StatusCentro status,
+        List<NecessidadeDTO> necessidades
 ) {
 }

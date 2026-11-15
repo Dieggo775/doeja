@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.doeja.dto.CentroDoacaoResponseDTO;
 import com.doeja.service.CentroDoacaoService;
 
+/** Consulta pública de centros (só aprovados). */
 @RestController
 @RequestMapping("/api/centros")
 public class CentroDoacaoController {
@@ -30,9 +31,10 @@ public class CentroDoacaoController {
             @RequestParam(name = "cidade", required = false) String cidade,
             @RequestParam(name = "cep", required = false) String cep,
             @RequestParam(name = "ativo", required = false) Boolean ativo,
+            @RequestParam(name = "categoria", required = false) String categoria,
             @PageableDefault(size = 10) Pageable pageable
     ) {
-        return service.listar(bairro, cidade, cep, ativo, pageable);
+        return service.listar(bairro, cidade, cep, ativo, categoria, pageable);
     }
 
     @GetMapping("/proximos")

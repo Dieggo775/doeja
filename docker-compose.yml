@@ -33,6 +33,11 @@ services:
       SPRING_DATASOURCE_USERNAME: ${DB_USER}
       SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD}
       SPRING_FLYWAY_LOCATIONS: classpath:db/migration,classpath:db/seed
+      JWT_SECRET: ${JWT_SECRET:-}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      ADMIN_SENHA: ${ADMIN_SENHA:-}
+      DEMO_ENABLED: ${DEMO_ENABLED:-true}
+      DEMO_SENHA: ${DEMO_SENHA:-}
     depends_on:
       postgres:
         condition: service_healthy
@@ -60,8 +65,45 @@ services:
       timeout: 5s
       retries: 3
 
+  # ---------------------------------------------------------------
+  # Testes automatizados (não sobe junto com o sistema).
+  # Rodar:  docker compose --profile test run --rm backend-tests
+  # Usa um Postgres próprio e descartável (dados em memória).
+  # ---------------------------------------------------------------
+  postgres-test:
+    image: postgres:16
+    profiles: ["test"]
+    environment:
+      POSTGRES_DB: doeja_test
+      POSTGRES_USER: doeja
+      POSTGRES_PASSWORD: doeja_test
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U doeja -d doeja_test"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  backend-tests:
+    image: maven:3.9-eclipse-temurin-17
+    profiles: ["test"]
+    working_dir: /app
+    command: ["mvn", "-B", "-q", "test"]
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-test:5432/doeja_test
+      SPRING_DATASOURCE_USERNAME: doeja
+      SPRING_DATASOURCE_PASSWORD: doeja_test
+    volumes:
+      - ./backend:/app
+      - maven_cache:/root/.m2
+    depends_on:
+      postgres-test:
+        condition: service_healthy
+
 volumes:
   postgres_data:
+  maven_cache:
 
 networks:
   default:

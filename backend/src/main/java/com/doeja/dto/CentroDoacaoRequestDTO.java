@@ -1,116 +1,60 @@
 package com.doeja.dto;
 
-public class CentroDoacaoRequestDTO {
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
 
-    private String nome;
-    private String descricao;
-    private String endereco;
-    private String bairro;
-    private String cidade;
-    private String estado;
-    private String cep;
-    private String telefone;
-    private String horarioFuncionamento;
-    private Double latitude;
-    private Double longitude;
-    private Boolean ativo;
+/**
+ * Dados enviados por um responsável ao cadastrar ou editar um centro.
+ * Status e responsável NÃO vêm daqui: são definidos pelo servidor.
+ */
+public record CentroDoacaoRequestDTO(
+        @NotBlank(message = "Informe o nome do centro.")
+        @Size(max = 160, message = "O nome pode ter até 160 caracteres.")
+        String nome,
 
-    public CentroDoacaoRequestDTO() {
-    }
+        @Size(max = 500, message = "A descrição pode ter até 500 caracteres.")
+        String descricao,
 
-    public String getNome() {
-        return nome;
-    }
+        @NotBlank(message = "Informe o endereço.")
+        @Size(max = 200, message = "O endereço pode ter até 200 caracteres.")
+        String endereco,
 
-    public void setNome(String nome) {
-        this.nome = nome;
-    }
+        @NotBlank(message = "Informe o bairro.")
+        @Size(max = 100)
+        String bairro,
 
-    public String getDescricao() {
-        return descricao;
-    }
+        @NotBlank(message = "Informe a cidade.")
+        @Size(max = 100)
+        String cidade,
 
-    public void setDescricao(String descricao) {
-        this.descricao = descricao;
-    }
+        @NotBlank(message = "Informe a UF.")
+        @Pattern(regexp = "[A-Za-z]{2}", message = "UF deve ter 2 letras (ex.: SP).")
+        String estado,
 
-    public String getEndereco() {
-        return endereco;
-    }
+        @Pattern(regexp = "^$|\\d{5}-?\\d{3}", message = "CEP deve estar no formato 00000-000.")
+        String cep,
 
-    public void setEndereco(String endereco) {
-        this.endereco = endereco;
-    }
+        @NotBlank(message = "Informe um telefone de contato.")
+        @Size(max = 20)
+        String telefone,
 
-    public String getBairro() {
-        return bairro;
-    }
+        @Pattern(regexp = "^$|\\d{10,15}", message = "WhatsApp: só números com DDI e DDD (ex.: 5511999999999).")
+        String whatsapp,
 
-    public void setBairro(String bairro) {
-        this.bairro = bairro;
-    }
+        @NotBlank(message = "Informe o horário de funcionamento.")
+        @Size(max = 200)
+        String horarioFuncionamento,
 
-    public String getCidade() {
-        return cidade;
-    }
+        @NotNull(message = "Informe a latitude.")
+        @DecimalMin(value = "-90.0") @DecimalMax(value = "90.0")
+        Double latitude,
 
-    public void setCidade(String cidade) {
-        this.cidade = cidade;
-    }
-
-    public String getEstado() {
-        return estado;
-    }
-
-    public void setEstado(String estado) {
-        this.estado = estado;
-    }
-
-    public String getCep() {
-        return cep;
-    }
-
-    public void setCep(String cep) {
-        this.cep = cep;
-    }
-
-    public String getTelefone() {
-        return telefone;
-    }
-
-    public void setTelefone(String telefone) {
-        this.telefone = telefone;
-    }
-
-    public String getHorarioFuncionamento() {
-        return horarioFuncionamento;
-    }
-
-    public void setHorarioFuncionamento(String horarioFuncionamento) {
-        this.horarioFuncionamento = horarioFuncionamento;
-    }
-
-    public Double getLatitude() {
-        return latitude;
-    }
-
-    public void setLatitude(Double latitude) {
-        this.latitude = latitude;
-    }
-
-    public Double getLongitude() {
-        return longitude;
-    }
-
-    public void setLongitude(Double longitude) {
-        this.longitude = longitude;
-    }
-
-    public Boolean getAtivo() {
-        return ativo;
-    }
-
-    public void setAtivo(Boolean ativo) {
-        this.ativo = ativo;
-    }
+        @NotNull(message = "Informe a longitude.")
+        @DecimalMin(value = "-180.0") @DecimalMax(value = "180.0")
+        Double longitude
+) {
 }
