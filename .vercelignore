@@ -1,0 +1,13 @@
+# A Vercel só publica o site (pasta frontend). O resto do repositório não sobe.
+backend
+docs
+*.docx
+*.drawio
+*.xlsx
+docker-compose.yml
+render.yaml
+.env*
+frontend/Dockerfile
+frontend/nginx.conf
+frontend/vercel.json
+frontend/.vercelignore
