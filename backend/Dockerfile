@@ -17,5 +17,8 @@ RUN addgroup -S doeja && adduser -S doeja -G doeja
 COPY --from=builder /app/target/*.jar app.jar
 USER doeja
 
+# Ajustado para máquinas pequenas (ex.: 512 MB do plano grátis do Render)
+ENV JAVA_OPTS="-XX:MaxRAMPercentage=75 -XX:+UseSerialGC -Xss512k -XX:TieredStopAtLevel=1"
+
 EXPOSE 8081
-ENTRYPOINT ["java", "-jar", "app.jar"]
+ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -jar app.jar"]

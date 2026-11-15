@@ -1,0 +1,31 @@
+# Blueprint do Render: cria a API do DoeJá a partir deste repositório.
+# No Render: New > Blueprint > escolha o repositório doeja.
+# Os campos com "sync: false" são pedidos na tela na hora de criar (segredos não ficam no Git).
+services:
+  - type: web
+    name: doeja-api
+    runtime: docker
+    rootDir: backend
+    dockerfilePath: ./Dockerfile
+    plan: free
+    region: virginia
+    healthCheckPath: /actuator/health
+    autoDeploy: true
+    envVars:
+      # Endereço do banco no Neon: postgresql://usuario:senha@host/banco?sslmode=require
+      - key: DATABASE_URL
+        sync: false
+      # Gerado automaticamente pelo Render (chave dos tokens de login)
+      - key: JWT_SECRET
+        generateValue: true
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: ADMIN_SENHA
+        sync: false
+      # Demonstração: instituições fictícias + contas de teste. Use "false" com instituições reais.
+      - key: DEMO_ENABLED
+        value: "true"
+      - key: DEMO_SENHA
+        sync: false
+      - key: SPRING_FLYWAY_LOCATIONS
+        value: classpath:db/migration,classpath:db/seed

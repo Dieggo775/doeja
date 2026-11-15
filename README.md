@@ -66,6 +66,11 @@ Variáveis do `.env`:
 | `DEMO_SENHA` | Senha das contas de demonstração (8+ caracteres) |
 | `DB_PORT`, `FRONTEND_PORT` | Portas no servidor (padrão 5434 e 3100) |
 
+### Publicar na internet
+
+Site na **Vercel**, API no **Render** e banco no **Neon**, todos gratuitos. Passo a passo em
+[`docs/05-DEPLOY.md`](docs/05-DEPLOY.md) (arquivos `frontend/vercel.json` e `render.yaml`).
+
 ### Dados de demonstração
 
 Com `DEMO_ENABLED=true`, o banco recebe **9 instituições fictícias** em ruas e bairros reais de Taboão da Serra
@@ -86,9 +91,9 @@ docker compose --profile test run --rm backend-tests
 docker compose --profile test down -v
 ```
 
-Sobe um PostgreSQL descartável e roda **28 testes**:
+Sobe um PostgreSQL descartável e roda **31 testes**:
 
-- **Unitários:** distância geográfica (Haversine), bloqueio de login por tentativas, regras de transição de status
+- **Unitários:** distância geográfica (Haversine), leitura do `DATABASE_URL`, bloqueio de login por tentativas, regras de transição de status
   da doação, cálculo dos indicadores, normalização de CEP/UF.
 - **Integração (API + banco real):** listagem pública só de aprovados, filtro por categoria, busca por proximidade,
   cadastro com validação e LGPD, e-mail duplicado, bloqueio após 5 senhas erradas, 401/403 por perfil, e o fluxo

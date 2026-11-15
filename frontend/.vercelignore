@@ -1,0 +1,3 @@
+# Arquivos do Docker/nginx: só servem para rodar no servidor próprio, não vão para a Vercel
+Dockerfile
+nginx.conf

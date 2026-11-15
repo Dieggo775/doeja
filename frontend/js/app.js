@@ -8,6 +8,7 @@ class DoeJaApp {
         this.MAP_CENTER = [-23.6165, -46.7750];
         this.RAIO_BUSCA_KM = 5;
         this.RAIO_MAXIMO_KM = 50;
+        this.MAX_TENTATIVAS = 10;
 
         this.currentPage = 0;
         this.pageSize = 10;
@@ -138,7 +139,7 @@ class DoeJaApp {
         centros.forEach(c => this.centrosPorId.set(c.id, c));
     }
 
-    async loadCentros(page = 0, filters = {}) {
+    async loadCentros(page = 0, filters = {}, tentativa = 0) {
         try {
             this.currentPage = page;
 
@@ -165,6 +166,11 @@ class DoeJaApp {
             this.lembrarCentros(centros);
 
             this.setNotice('');
+            if (tentativa > 0) {
+                // O servidor acabou de acordar: carrega o que falhou na primeira tentativa
+                if (!this.categorias.length) this.loadCategorias();
+                window.areas?.verificarDemonstracao();
+            }
             this.renderCentros(centros);
             this.renderPagination(pageData);
             this.renderMarkers(centros);
@@ -177,6 +183,15 @@ class DoeJaApp {
 
         } catch (error) {
             console.error('Erro ao carregar centros:', error);
+
+            // Em hospedagem gratuita o servidor "dorme" e leva até ~1 min para acordar:
+            // tenta de novo algumas vezes antes de mostrar erro.
+            if (tentativa < this.MAX_TENTATIVAS) {
+                this.setNotice('Conectando ao servidor... (pode levar até 1 minuto na primeira visita)');
+                setTimeout(() => this.loadCentros(page, filters, tentativa + 1), 8000);
+                return;
+            }
+            this.setNotice('');
             this.renderErrorState();
         }
     }
