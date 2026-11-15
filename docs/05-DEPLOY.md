@@ -1,10 +1,12 @@
 # Publicação na internet: Vercel + Render + Neon
 
+No ar: **https://doeja.vercel.app** (site) e **https://doeja-api.onrender.com** (API).
+
 ```
 Navegador ──> Vercel (site: pasta frontend/) ──/api/*──> Render (API Java: pasta backend/) ──> Neon (PostgreSQL)
 ```
 
-Tudo nos planos gratuitos. A Vercel repassa `/api/*` para o Render (`frontend/vercel.json`), então o
+Tudo nos planos gratuitos. A Vercel repassa `/api/*` para o Render (`vercel.json`), então o
 navegador fala com um endereço só e não há configuração de CORS.
 
 > No plano grátis do Render a API "dorme" após 15 min sem uso. A primeira visita depois disso leva
@@ -29,13 +31,15 @@ navegador fala com um endereço só e não há configuração de CORS.
    - `JWT_SECRET` é gerado sozinho.
 4. Aguarde o deploy (o primeiro leva de 5 a 10 min). Teste em `https://doeja-api.onrender.com/actuator/health`,
    que deve responder `{"status":"UP"}`.
-5. Se o Render der outro endereço (por exemplo, `doeja-api-xyz.onrender.com`), troque-o em `frontend/vercel.json`.
+5. Se o Render der outro endereço (por exemplo, `doeja-api-xyz.onrender.com`), troque-o em `vercel.json` e `frontend/vercel.json`.
 
 ## 3. Site na Vercel
 
 1. Entre em https://vercel.com, **Add New > Project** e importe o repositório `doeja`.
-2. Em **Root Directory** escolha `frontend`. Framework: **Other**. Sem comando de build.
-3. **Deploy**. O site fica em `https://<nome-do-projeto>.vercel.app`.
+2. Pode deixar o **Root Directory** na raiz: o `vercel.json` da raiz já manda publicar só a pasta `frontend`
+   (o `.vercelignore` impede que backend e documentos subam). Framework: **Other**.
+3. **Deploy**. O site oficial fica no domínio de produção do projeto (no nosso caso, **https://doeja.vercel.app**).
+   Os links com sufixo aleatório (`doeja-abc123-...vercel.app`) são de versões específicas e pedem login na Vercel.
 
 Pelo terminal, a alternativa é:
 

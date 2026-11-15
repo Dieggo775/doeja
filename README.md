@@ -68,7 +68,7 @@ Variáveis do `.env`:
 
 ### Publicar na internet
 
-Site na **Vercel**, API no **Render** e banco no **Neon**, todos gratuitos. Passo a passo em
+No ar em **https://doeja.vercel.app**. Site na **Vercel**, API no **Render** e banco no **Neon**, todos gratuitos. Passo a passo em
 [`docs/05-DEPLOY.md`](docs/05-DEPLOY.md) (arquivos `frontend/vercel.json` e `render.yaml`).
 
 ### Dados de demonstração
