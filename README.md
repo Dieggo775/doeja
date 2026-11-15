@@ -91,7 +91,7 @@ docker compose --profile test run --rm backend-tests
 docker compose --profile test down -v
 ```
 
-Sobe um PostgreSQL descartável e roda **31 testes**:
+Sobe um PostgreSQL descartável e roda **34 testes**:
 
 - **Unitários:** distância geográfica (Haversine), leitura do `DATABASE_URL`, bloqueio de login por tentativas, regras de transição de status
   da doação, cálculo dos indicadores, normalização de CEP/UF.

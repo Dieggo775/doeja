@@ -87,30 +87,52 @@ public class ContasIniciais implements ApplicationRunner {
             }
             return;
         }
-        if (adminSenha.length() < 8) {
+        // Espaços e quebras de linha no começo/fim costumam vir do copiar e colar no painel da hospedagem
+        String email = adminEmail.trim().toLowerCase(Locale.ROOT);
+        String senha = adminSenha.trim();
+        if (senha.length() < 8) {
             log.error("ADMIN_SENHA precisa ter pelo menos 8 caracteres. Administrador não criado.");
             return;
         }
-        if (criarSeNaoExiste(adminEmail, adminNome, adminSenha, Papel.ADMIN) != null) {
-            log.info("Administrador criado: {}", adminEmail);
+
+        Usuario existente = usuarios.findByEmailIgnoreCase(email).orElse(null);
+        if (existente == null) {
+            criarSeNaoExiste(email, adminNome, senha, Papel.ADMIN);
+            log.info("Administrador criado: {}", email);
+            return;
         }
+
+        // A conta de ADMIN_EMAIL sempre segue o que está configurado na hospedagem
+        if (existente.getPapel() != Papel.ADMIN) {
+            log.warn("A conta {} existia como {} e foi promovida a ADMIN (definida em ADMIN_EMAIL).",
+                    email, existente.getPapel());
+            existente.setPapel(Papel.ADMIN);
+        }
+        if (!Boolean.TRUE.equals(existente.getAtivo())) {
+            existente.setAtivo(true);
+        }
+        if (!passwordEncoder.matches(senha, existente.getSenhaHash())) {
+            existente.setSenhaHash(passwordEncoder.encode(senha));
+            log.info("Senha do administrador {} atualizada a partir de ADMIN_SENHA.", email);
+        }
+        log.info("Administrador pronto: {}", email);
     }
 
     private void criarContasDemo() {
         if (!demoAtivo) {
             return;
         }
+        String demoSenha = this.demoSenha.trim();
         if (demoSenha.length() < 8) {
             log.warn("DEMO_ENABLED=true, mas DEMO_SENHA não tem 8+ caracteres: contas de demonstração não criadas.");
             return;
         }
 
-        criarSeNaoExiste(EMAIL_DOADOR_DEMO, "Doador de Demonstração", demoSenha, Papel.USUARIO);
+        contaDemo(EMAIL_DOADOR_DEMO, "Doador de Demonstração", demoSenha, Papel.USUARIO);
 
         var todosCentros = centros.findAll();
         for (ContaCentro conta : CONTAS_CENTROS) {
-            Usuario responsavel = usuarios.findByEmailIgnoreCase(conta.email())
-                    .orElseGet(() -> criarSeNaoExiste(conta.email(), conta.nome(), demoSenha, Papel.CENTRO));
+            Usuario responsavel = contaDemo(conta.email(), conta.nome(), demoSenha, Papel.CENTRO);
 
             // Liga o responsável ao centro do seed, se o centro ainda não tiver dono
             todosCentros.stream()
@@ -118,6 +140,18 @@ public class ContasIniciais implements ApplicationRunner {
                     .forEach(c -> c.setResponsavel(responsavel));
         }
         log.info("Contas de demonstração conferidas ({} centros + 1 doador).", CONTAS_CENTROS.size());
+    }
+
+    /** Conta de demonstração: cria se faltar e mantém a senha igual à DEMO_SENHA atual. */
+    private Usuario contaDemo(String email, String nome, String senha, Papel papel) {
+        Usuario conta = usuarios.findByEmailIgnoreCase(email).orElse(null);
+        if (conta == null) {
+            return criarSeNaoExiste(email, nome, senha, papel);
+        }
+        if (!passwordEncoder.matches(senha, conta.getSenhaHash())) {
+            conta.setSenhaHash(passwordEncoder.encode(senha));
+        }
+        return conta;
     }
 
     /** Cria a conta e devolve; se o e-mail já existe, não mexe e devolve null. */
