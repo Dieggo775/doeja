@@ -40,11 +40,15 @@ class Areas {
         window.addEventListener('hashchange', () => this.rotear());
         window.addEventListener('doeja:sessao', () => this.atualizarCabecalho());
 
-        document.getElementById('logoutBtn')?.addEventListener('click', () => {
+        const sair = () => {
             Api.sair();
             this.toast('Você saiu da sua conta.');
             location.hash = '#/';
-        });
+        };
+        document.getElementById('logoutBtn')?.addEventListener('click', sair);
+        document.getElementById('bottomSair')?.addEventListener('click', sair);
+
+        this.prepararInstalacao();
 
         document.getElementById('loginForm')?.addEventListener('submit', e => this.entrar(e));
         document.getElementById('cadastroForm')?.addEventListener('submit', e => this.cadastrar(e));
@@ -57,6 +61,16 @@ class Areas {
 
         document.querySelectorAll('dialog [data-fechar]').forEach(btn =>
             btn.addEventListener('click', () => btn.closest('dialog').close()));
+
+        // Tocar fora da janela (no fundo escuro) também fecha
+        document.querySelectorAll('dialog.modal').forEach(dialog =>
+            dialog.addEventListener('click', evento => {
+                if (evento.target !== dialog) return;
+                const r = dialog.getBoundingClientRect();
+                const fora = evento.clientX < r.left || evento.clientX > r.right
+                    || evento.clientY < r.top || evento.clientY > r.bottom;
+                if (fora) dialog.close();
+            }));
 
         document.querySelectorAll('[data-admin-filtro]').forEach(btn => btn.addEventListener('click', () => {
             this.filtroAdmin = btn.dataset.adminFiltro;
@@ -122,6 +136,31 @@ class Areas {
         }
     }
 
+    // ------------------------------------------------------------------ instalar como app
+
+    /** Chrome/Android/Edge oferecem a instalação; guardamos o pedido e mostramos o botão. */
+    prepararInstalacao() {
+        const botao = document.getElementById('instalarBtn');
+        if (!botao) return;
+
+        window.addEventListener('beforeinstallprompt', evento => {
+            evento.preventDefault();
+            this.pedidoInstalacao = evento;
+            botao.hidden = false;
+        });
+        botao.addEventListener('click', async () => {
+            if (!this.pedidoInstalacao) return;
+            this.pedidoInstalacao.prompt();
+            await this.pedidoInstalacao.userChoice;
+            this.pedidoInstalacao = null;
+            botao.hidden = true;
+        });
+        window.addEventListener('appinstalled', () => {
+            botao.hidden = true;
+            this.toast('DoeJá instalado! Ele já está na sua tela inicial.');
+        });
+    }
+
     // ------------------------------------------------------------------ navegação
 
     rotear() {
@@ -144,7 +183,7 @@ class Areas {
         }
 
         document.querySelectorAll('.view').forEach(v => { v.hidden = v.id !== rota.view; });
-        document.querySelectorAll('#mainNav a').forEach(a =>
+        document.querySelectorAll('#mainNav a, #bottomNav a').forEach(a =>
             a.classList.toggle('ativo', a.dataset.rota === caminho));
 
         if (rota.view === 'view-inicio' && this.app.map) {
@@ -163,9 +202,11 @@ class Areas {
         chip.hidden = !usuario;
         chip.textContent = usuario ? `Olá, ${usuario.nome.split(' ')[0]}` : '';
 
-        document.querySelectorAll('#mainNav [data-papel]').forEach(a => {
+        document.querySelectorAll('#mainNav [data-papel], #bottomNav [data-papel]').forEach(a => {
             a.hidden = !usuario || usuario.papel !== a.dataset.papel;
         });
+        document.getElementById('bottomEntrar').hidden = !!usuario;
+        document.getElementById('bottomSair').hidden = !usuario;
     }
 
     paginaInicialDo(papel) {

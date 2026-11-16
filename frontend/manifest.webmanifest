@@ -1,0 +1,23 @@
+{
+  "name": "DoeJá - Centros de doação",
+  "short_name": "DoeJá",
+  "description": "Encontre centros de doação de Taboão da Serra, veja o que estão precisando e registre sua doação.",
+  "lang": "pt-BR",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f7f6f2",
+  "theme_color": "#0f766e",
+  "categories": ["social", "lifestyle"],
+  "icons": [
+    { "src": "assets/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "assets/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "assets/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Encontrar centros", "url": "./#/", "icons": [{ "src": "assets/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Minhas doações", "url": "./#/doacoes", "icons": [{ "src": "assets/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Impacto", "url": "./#/impacto", "icons": [{ "src": "assets/icon-192.png", "sizes": "192x192" }] }
+  ]
+}

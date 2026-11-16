@@ -2,7 +2,15 @@
 <html lang="pt-BR" data-theme="light">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#0f766e">
+    <link rel="manifest" href="manifest.webmanifest">
+    <link rel="icon" href="assets/icon-192.png" type="image/png">
+    <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="DoeJá">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <title>DoeJá - Encontre centros de doação próximos</title>
     <meta name="description" content="DoeJá conecta doadores a centros de doação de Taboão da Serra: veja no mapa quem está precisando de quê e registre sua doação.">
 
@@ -17,10 +25,12 @@
 
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="css/extras.css">
+    <link rel="stylesheet" href="css/mobile.css">
 </head>
 <body>
     <div class="demo-banner" id="demoBanner" hidden>
-        Ambiente de demonstração: as instituições exibidas são fictícias (endereços e mapa reais, nomes e telefones inventados).
+        <span class="so-desktop">Ambiente de demonstração: as instituições exibidas são fictícias (endereços e mapa reais, nomes e telefones inventados).</span>
+        <span class="so-mobile">Demonstração: instituições fictícias</span>
     </div>
 
     <header class="header">
@@ -43,6 +53,9 @@
             </nav>
 
             <div class="header-actions">
+                <button class="pagination-btn instalar-btn" id="instalarBtn" type="button" hidden>
+                    <i data-lucide="download"></i><span>Instalar app</span>
+                </button>
                 <span class="user-chip" id="userChip" hidden></span>
                 <a href="#/entrar" class="pagination-btn" id="loginLink">Entrar</a>
                 <button class="pagination-btn" id="logoutBtn" type="button" hidden>Sair</button>
@@ -90,7 +103,13 @@
 
             <section class="filters-section">
                 <div class="container">
-                    <div class="filters">
+                    <div class="chips-linha">
+                        <div class="chips" id="chipsCategorias" role="group" aria-label="O que você quer doar"></div>
+                        <button class="clear-btn filtros-toggle" id="filtrosToggle" type="button" aria-expanded="false" aria-controls="filtrosAvancados">
+                            <i data-lucide="sliders-horizontal"></i><span>Filtros</span>
+                        </button>
+                    </div>
+                    <div class="filters" id="filtrosAvancados">
                         <select id="categoriaFilter" class="filter-select" aria-label="O que você quer doar">
                             <option value="">O que doar?</option>
                         </select>
@@ -313,6 +332,17 @@
             </div>
         </form>
     </dialog>
+
+    <!-- Barra inferior (celular) -->
+    <nav class="bottom-nav" id="bottomNav" aria-label="Navegação">
+        <a href="#/" data-rota="/" aria-label="Centros"><i data-lucide="map-pin"></i><span>Centros</span></a>
+        <a href="#/impacto" data-rota="/impacto" aria-label="Impacto"><i data-lucide="bar-chart-3"></i><span>Impacto</span></a>
+        <a href="#/doacoes" data-rota="/doacoes" data-papel="USUARIO" aria-label="Minhas doações" hidden><i data-lucide="heart-handshake"></i><span>Doações</span></a>
+        <a href="#/centro" data-rota="/centro" data-papel="CENTRO" aria-label="Meu centro" hidden><i data-lucide="building-2"></i><span>Meu centro</span></a>
+        <a href="#/admin" data-rota="/admin" data-papel="ADMIN" aria-label="Administração" hidden><i data-lucide="shield-check"></i><span>Admin</span></a>
+        <a href="#/entrar" data-rota="/entrar" id="bottomEntrar" aria-label="Entrar"><i data-lucide="log-in"></i><span>Entrar</span></a>
+        <button type="button" id="bottomSair" aria-label="Sair" hidden><i data-lucide="log-out"></i><span>Sair</span></button>
+    </nav>
 
     <footer class="footer">
         <div class="container">

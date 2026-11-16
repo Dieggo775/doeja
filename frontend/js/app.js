@@ -29,7 +29,17 @@ class DoeJaApp {
         this.setupEventListeners();
         this.initThemeToggle();
         this.initMap();
+        this.registrarServiceWorker();
         await Promise.all([this.loadCategorias(), this.loadCentros()]);
+    }
+
+    // App instalável (PWA): o service worker guarda o "esqueleto" do site para abrir rápido
+    registrarServiceWorker() {
+        if ('serviceWorker' in navigator && window.isSecureContext) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('sw.js').catch(err => console.warn('Service worker não registrado:', err));
+            });
+        }
     }
 
     loadIcons() {
@@ -84,6 +94,29 @@ class DoeJaApp {
         document.getElementById('useLocationBtn')?.addEventListener('click', () => this.useMyLocation());
         document.getElementById('applyFilters')?.addEventListener('click', () => this.applyFilters());
         document.getElementById('clearFilters')?.addEventListener('click', () => this.clearFilters());
+
+        // Celular: filtros avançados ficam recolhidos atrás do botão "Filtros"
+        document.getElementById('filtrosToggle')?.addEventListener('click', event => {
+            const painel = document.getElementById('filtrosAvancados');
+            const aberto = painel.classList.toggle('aberto');
+            event.currentTarget.setAttribute('aria-expanded', String(aberto));
+        });
+
+        // Chips de categoria: um toque já filtra
+        document.getElementById('chipsCategorias')?.addEventListener('click', event => {
+            const chip = event.target.closest('[data-categoria]');
+            if (!chip) return;
+            document.getElementById('categoriaFilter').value = chip.dataset.categoria;
+            this.applyFilters();
+        });
+    }
+
+    marcarChip(categoria) {
+        document.querySelectorAll('#chipsCategorias [data-categoria]').forEach(chip => {
+            const ativo = chip.dataset.categoria === (categoria || '');
+            chip.classList.toggle('ativo', ativo);
+            chip.setAttribute('aria-pressed', String(ativo));
+        });
     }
 
     initThemeToggle() {
@@ -129,6 +162,15 @@ class DoeJaApp {
                 select.innerHTML = '<option value="">O que doar?</option>' + this.categorias
                     .map(c => `<option value="${this.escapeHtml(c.slug)}">${this.escapeHtml(c.nome)}</option>`)
                     .join('');
+            }
+
+            const curtos = { alimentos: 'Alimentos', roupas: 'Roupas', higiene: 'Higiene', 'material-escolar': 'Escolar',
+                             infantil: 'Infantil', moveis: 'Móveis', brinquedos: 'Brinquedos', outros: 'Outros' };
+            const chips = document.getElementById('chipsCategorias');
+            if (chips) {
+                chips.innerHTML = '<button type="button" class="chip ativo" data-categoria="" aria-pressed="true">Todos</button>'
+                    + this.categorias.map(c => `<button type="button" class="chip" data-categoria="${this.escapeHtml(c.slug)}" aria-pressed="false">${this.escapeHtml(curtos[c.slug] || c.nome)}</button>`).join('');
+                this.marcarChip(this.currentFilters.categoria);
             }
         } catch (error) {
             console.error('Erro ao carregar categorias:', error);
@@ -229,13 +271,13 @@ class DoeJaApp {
                     </div>` : '';
 
             const ligarHtml = tel.length >= 8
-                ? `<a href="tel:${this.escapeHtml(tel)}" class="pagination-btn">Ligar</a>`
+                ? `<a href="tel:${this.escapeHtml(tel)}" class="pagination-btn acao-sec" aria-label="Ligar"><i data-lucide="phone"></i><span class="rotulo">Ligar</span></a>`
                 : '';
 
             const mensagemZap = 'Olá! Vi o centro no DoeJá e gostaria de doar.';
             const whatsappHtml = centro.whatsapp.length >= 10 && centro.whatsapp.length <= 15
                 ? `<a href="https://wa.me/${centro.whatsapp}?text=${encodeURIComponent(mensagemZap)}"
-                       target="_blank" rel="noopener noreferrer" class="pagination-btn">WhatsApp</a>`
+                       target="_blank" rel="noopener noreferrer" class="pagination-btn acao-sec" aria-label="WhatsApp"><i data-lucide="message-circle"></i><span class="rotulo">WhatsApp</span></a>`
                 : '';
 
             const necessidadesHtml = centro.necessidades.length ? `
@@ -248,14 +290,14 @@ class DoeJaApp {
                 </ul>` : '';
 
             const doarHtml = centro.ativo
-                ? `<button class="filter-btn" type="button" onclick="areas.abrirDoacao(${Number(centro.id)})">
+                ? `<button class="filter-btn acao-doar" type="button" onclick="areas.abrirDoacao(${Number(centro.id)})">
                        <i data-lucide="heart-handshake"></i> Quero doar
                    </button>`
                 : '';
 
             const rotaHtml = temCoordenadas
                 ? `<a href="https://www.google.com/maps/search/?api=1&query=${centro.latitude},${centro.longitude}"
-                       target="_blank" rel="noopener noreferrer" class="pagination-btn">Como chegar</a>`
+                       target="_blank" rel="noopener noreferrer" class="pagination-btn acao-sec" aria-label="Como chegar"><i data-lucide="navigation"></i><span class="rotulo">Como chegar</span></a>`
                 : '';
 
             return `
@@ -293,7 +335,7 @@ class DoeJaApp {
 
                 <div class="centro-actions">
                     ${doarHtml}
-                    <button class="pagination-btn" type="button" onclick="app.viewOnMap(this)">Ver no mapa</button>
+                    <button class="pagination-btn acao-sec" type="button" onclick="app.viewOnMap(this)" aria-label="Ver no mapa"><i data-lucide="map"></i><span class="rotulo">Ver no mapa</span></button>
                     ${whatsappHtml}
                     ${rotaHtml}
                     ${ligarHtml}
@@ -379,6 +421,7 @@ class DoeJaApp {
         const categoria = document.getElementById('categoriaFilter')?.value || '';
 
         this.currentFilters = { cidade, bairro, ativo, categoria };
+        this.marcarChip(categoria);
         await this.loadCentros(0, this.currentFilters);
     }
 
@@ -387,6 +430,7 @@ class DoeJaApp {
         document.getElementById('bairroFilter').value = '';
         document.getElementById('ativoFilter').value = '';
         document.getElementById('categoriaFilter').value = '';
+        this.marcarChip('');
         document.getElementById('searchLocation').value = '';
         this.currentFilters = {};
         this.removeUserMarker();
